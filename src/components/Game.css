@@ -1,0 +1,80 @@
+body {
+  margin: 0;
+  padding: 0;
+}
+
+.game {
+  width: 400px;
+  height: 500px;
+  background-color: skyblue;
+  position: relative;
+  overflow: hidden;
+  cursor: pointer;
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+.start {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 24px;
+  color: white;
+  text-shadow: 2px 2px black;
+}
+
+.game-over {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 24px;
+  color: white;
+  text-shadow: 2px 2px black;
+  text-align: center;
+}
+
+.game-over-buttons {
+  display: flex;
+  gap: 10px;
+  margin-top: 20px;
+}
+
+.game-over button {
+  padding: 10px 20px;
+  font-size: 16px;
+  cursor: pointer;
+  border: none;
+  border-radius: 5px;
+  background-color: white;
+  transition: background-color 0.2s;
+}
+
+.game-over button:hover {
+  background-color: #eee;
+}
+
+.score {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  font-size: 24px;
+  color: white;
+  text-shadow: 2px 2px black;
+}
+
+.bird {
+  z-index: 2;
+}
+
+.pipe {
+  z-index: 1;
+}
+
+.particle {
+  position: absolute;
+  pointer-events: none;
+  will-change: transform, opacity;
+} 
