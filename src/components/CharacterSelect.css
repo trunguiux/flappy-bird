@@ -27,10 +27,21 @@
   box-shadow: 0 0 10px rgba(0, 0, 0, 0.2);
 }
 
-.character img {
-  width: 60px;
-  height: 60px;
-  object-fit: contain;
+.character .preview {
+  width: 40px;
+  height: 40px;
+  margin: 0 auto;
+  background-repeat: no-repeat;
+  animation: fly 0.3s steps(3) infinite;
+}
+
+@keyframes fly {
+  from {
+    background-position: 0px 0;
+  }
+  to {
+    background-position: -120px 0;
+  }
 }
 
 .character p {
@@ -48,4 +59,35 @@
 h2 {
   color: white;
   text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+}
+
+/* Add this test animation to see if animations work at all */
+.test-animation {
+  width: 40px;
+  height: 40px;
+  background-color: red;
+  animation: moveTest 1s infinite;
+}
+
+@keyframes moveTest {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(50px); }
+}
+
+@keyframes sprite-animation {
+  0% {
+    background-position: 0 0;
+  }
+  100% {
+    background-position: -120px 0;
+  }
+}
+
+.preview {
+  width: 40px;
+  height: 40px;
+  margin: 0 auto;
+  background-repeat: no-repeat;
+  image-rendering: pixelated;
+  transform: scale(1.5);  /* Make the preview a bit bigger */
 } 

@@ -19,9 +19,10 @@ export default function Game() {
     { x: 500, y: 100, speed: 0.75 },
   ]);
   const [scoredPairs, setScoredPairs] = useState(new Set());
+  const [velocity, setVelocity] = useState(0);
   
-  const gravity = 3;
-  const jumpHeight = 50;
+  const gravity = 0.5;
+  const jumpHeight = 8;
   const pipeGap = 150;
   
   // Add audio element
@@ -35,7 +36,7 @@ export default function Game() {
 
   const jump = useCallback(() => {
     if (!gameOver) {
-      setBirdPosition(pos => pos - jumpHeight);
+      setVelocity(-8);
       if (!gameStarted) setGameStarted(true);
     }
   }, [gameOver]);
@@ -58,7 +59,15 @@ export default function Game() {
     let gameLoop;
     if (gameStarted && !gameOver) {
       gameLoop = setInterval(() => {
-        setBirdPosition(pos => pos + gravity);
+        // Gentler gravity acceleration
+        setVelocity(v => Math.min(v + 0.4, 8));
+        
+        // Update position using velocity
+        setBirdPosition(pos => {
+          const newPos = pos + velocity;
+          // Prevent bird from going above screen
+          return Math.max(0, newPos);
+        });
         
         // Move clouds with parallax effect
         setClouds(currentClouds => 
@@ -123,7 +132,7 @@ export default function Game() {
       }, 20);
     }
     return () => clearInterval(gameLoop);
-  }, [gameStarted, gameOver, birdPosition, pipePairs, scoredPairs]);
+  }, [gameStarted, gameOver, birdPosition, pipePairs, scoredPairs, velocity]);
 
   const resetGame = () => {
     setBirdPosition(250);
@@ -149,7 +158,11 @@ export default function Game() {
       {clouds.map((cloud, i) => (
         <Cloud key={`cloud-${i}`} x={cloud.x} y={cloud.y} />
       ))}
-      <Bird position={birdPosition} characterImage={selectedCharacter.image} />
+      <Bird 
+        position={birdPosition} 
+        characterImage={selectedCharacter.spriteSheet}
+        velocity={velocity}
+      />
       {pipePairs.map(pair => (
         <Pipe 
           key={pair.id}

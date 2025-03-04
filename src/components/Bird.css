@@ -1,0 +1,15 @@
+.game-bird {
+  background-repeat: no-repeat;
+  background-position: 0 0;
+  animation: sprite-animation 0.3s steps(3) infinite;
+  image-rendering: pixelated;
+}
+
+@keyframes sprite-animation {
+  0% {
+    background-position: 0 0;
+  }
+  100% {
+    background-position: -120px 0;
+  }
+} 

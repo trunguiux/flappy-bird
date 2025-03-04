@@ -1,17 +1,38 @@
-// This function will dynamically import all character images
-function importAll(r) {
-  const images = {};
-  r.keys().forEach((item, index) => {
-    images[item.replace('./', '')] = {
-      id: index,
-      image: r(item),
-      name: `Bird ${index + 1}`
-    };
+// Import all images using require.context
+const importAll = (r) => {
+  let images = {};
+  r.keys().forEach((item) => {
+    images[item.replace('./', '')] = r(item);
   });
-  return Object.values(images);
-}
+  return images;
+};
 
 // Import all images from the characters directory
-const characters = importAll(require.context('../assets/characters', false, /\.(png|jpe?g|svg)$/));
+const images = importAll(require.context('../assets/characters', false, /\.(png|jpe?g|svg)$/));
+
+console.log('All imported images:', images);
+
+const characters = [
+  {
+    id: 1,
+    image: images['char_01.png'],
+    spriteSheet: images['bird1_sprite.png'],
+    name: 'Bird 1'
+  },
+  {
+    id: 2,
+    image: images['char_02.png'],
+    spriteSheet: images['bird2_sprite.png'],
+    name: 'Bird 2'
+  },
+  {
+    id: 3,
+    image: images['char_03.png'],
+    spriteSheet: images['bird3_sprite.png'],
+    name: 'Bird 3'
+  }
+];
+
+console.log('Characters array:', characters);
 
 export default characters; 
