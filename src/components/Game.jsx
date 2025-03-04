@@ -1,50 +1,232 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef, memo, useReducer } from 'react';
 import Bird from './Bird';
 import Pipe from './Pipe';
 import Cloud from './Cloud';
 import Ground from './Ground';
 import CharacterSelect from './CharacterSelect';
+import scoreAudio from '../assets/sounds/score.mp3';
+import backgroundAudio from '../assets/sounds/background.mp3';
 import './Game.css';
+
+// Memoize components that don't need frequent updates
+const MemoizedBird = memo(Bird);
+const MemoizedPipe = memo(Pipe);
+const MemoizedCloud = memo(Cloud);
+const MemoizedGround = memo(Ground);
+
+// Object pools
+const POOL_SIZE = 10;
+const pipePool = Array(POOL_SIZE).fill(null).map(() => ({ id: Math.random() }));
+let nextPipeIndex = 0;
+
+const getPipeFromPool = () => {
+  const pipe = pipePool[nextPipeIndex];
+  nextPipeIndex = (nextPipeIndex + 1) % POOL_SIZE;
+  return pipe;
+};
+
+// Initial state
+const initialState = {
+  birdPosition: 250,
+  velocity: 0,
+  gameStarted: false,
+  gameOver: false,
+  score: 0,
+  pipePairs: [],
+  clouds: [
+    { id: 1, x: 100, y: 50, speed: 1 },
+    { id: 2, x: 300, y: 150, speed: 1.5 },
+    { id: 3, x: 500, y: 100, speed: 0.75 },
+  ],
+  scoredPairs: new Set()
+};
+
+// Game constants
+const CONSTANTS = {
+  gravity: 0.4,
+  jumpVelocity: -7,
+  maxVelocity: 7,
+  pipeGap: 150,
+  groundHeight: 80,
+  pipeSpeed: 4,
+  gameWidth: 400,
+  gameHeight: 500,
+  birdX: 100,
+  birdSize: 40,
+  pipeWidth: 60
+};
+
+// Reducer for game state
+function gameReducer(state, action) {
+  switch (action.type) {
+    case 'START_GAME':
+      return {
+        ...state,
+        gameStarted: true
+      };
+    
+    case 'UPDATE_GAME': {
+      if (!state.gameStarted || state.gameOver) return state;
+
+      const newVelocity = Math.min(state.velocity + CONSTANTS.gravity, CONSTANTS.maxVelocity);
+      const newBirdPosition = Math.max(0, state.birdPosition + newVelocity);
+
+      // Update clouds with minimal object creation
+      const newClouds = state.clouds.map(cloud => {
+        const newX = cloud.x - cloud.speed;
+        return newX < -100 ? 
+          { ...cloud, x: 500, y: Math.random() * 200 } :
+          { ...cloud, x: newX };
+      });
+
+      // Update pipes with object pooling
+      let newScore = state.score;
+      let newScoredPairs = state.scoredPairs;
+      const newPipePairs = state.pipePairs
+        .map(pair => {
+          const scoringZone = pair.x + 30;
+          if (scoringZone <= CONSTANTS.birdX + CONSTANTS.birdSize && !state.scoredPairs.has(pair.id)) {
+            newScore++;
+            newScoredPairs = new Set([...newScoredPairs, pair.id]);
+            action.onScore?.();
+          }
+          return { ...pair, x: pair.x - CONSTANTS.pipeSpeed };
+        })
+        .filter(pair => pair.x > -60);
+
+      // Add new pipe if needed
+      if (state.pipePairs.length === 0 || state.pipePairs[state.pipePairs.length - 1].x < 50) {
+        const pipe = getPipeFromPool();
+        const topHeight = Math.random() * 200 + 100;
+        newPipePairs.push({
+          ...pipe,
+          x: 400,
+          topHeight,
+          bottomHeight: CONSTANTS.gameHeight - topHeight - CONSTANTS.pipeGap
+        });
+      }
+
+      // Check collisions
+      const collision = newBirdPosition >= CONSTANTS.gameHeight - CONSTANTS.groundHeight - CONSTANTS.birdSize ||
+        newBirdPosition <= 0 ||
+        newPipePairs.some(pair => {
+          if (pair.x < CONSTANTS.birdX + CONSTANTS.birdSize && 
+              pair.x + CONSTANTS.pipeWidth > CONSTANTS.birdX) {
+            return newBirdPosition < pair.topHeight || 
+                   newBirdPosition + CONSTANTS.birdSize > CONSTANTS.gameHeight - pair.bottomHeight;
+          }
+          return false;
+        });
+
+      if (collision) {
+        return {
+          ...state,
+          gameOver: true,
+          pipePairs: newPipePairs,
+          clouds: newClouds,
+          birdPosition: newBirdPosition,
+          velocity: newVelocity,
+          score: newScore,
+          scoredPairs: newScoredPairs
+        };
+      }
+
+      return {
+        ...state,
+        pipePairs: newPipePairs,
+        clouds: newClouds,
+        birdPosition: newBirdPosition,
+        velocity: newVelocity,
+        score: newScore,
+        scoredPairs: newScoredPairs
+      };
+    }
+
+    case 'JUMP':
+      if (state.gameOver) return state;
+      return {
+        ...state,
+        velocity: CONSTANTS.jumpVelocity,
+        gameStarted: true
+      };
+
+    case 'RESET':
+      return {
+        ...initialState,
+        clouds: state.clouds // Preserve cloud positions
+      };
+
+    default:
+      return state;
+  }
+}
 
 export default function Game() {
   const [selectedCharacter, setSelectedCharacter] = useState(null);
-  const [birdPosition, setBirdPosition] = useState(250);
-  const [gameStarted, setGameStarted] = useState(false);
-  const [score, setScore] = useState(0);
-  const [gameOver, setGameOver] = useState(false);
-  const [pipePairs, setPipePairs] = useState([]);
-  const [clouds, setClouds] = useState([
-    { x: 100, y: 50, speed: 1 },
-    { x: 300, y: 150, speed: 1.5 },
-    { x: 500, y: 100, speed: 0.75 },
-  ]);
-  const [scoredPairs, setScoredPairs] = useState(new Set());
-  const [velocity, setVelocity] = useState(0);
+  const [state, dispatch] = useReducer(gameReducer, initialState);
   
-  const gravity = 0.5;
-  const jumpHeight = 8;
-  const pipeGap = 150;
-  
-  // Add audio element
-  const scoreSound = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
-  scoreSound.volume = 0.3; // Adjust volume (0.0 to 1.0)
-  
-  const playScoreSound = () => {
-    scoreSound.currentTime = 0; // Reset sound to start
-    scoreSound.play().catch(err => console.log('Audio play failed:', err));
-  };
+  // Refs for game loop
+  const gameLoopRef = useRef(null);
+  const lastUpdateRef = useRef(0);
+  const FPS = 60;
+  const frameInterval = 1000 / FPS;
+
+  // Audio handlers
+  const playScoreSound = useCallback(() => {
+    const audio = document.getElementById('scoreSound');
+    if (audio) {
+      audio.currentTime = 0;
+      audio.play().catch(err => console.log('Audio play failed:', err));
+    }
+  }, []);
+
+  // Background music
+  useEffect(() => {
+    const bgMusic = document.getElementById('bgMusic');
+    if (bgMusic) {
+      if (state.gameStarted && !state.gameOver) {
+        bgMusic.volume = 0.1;
+        bgMusic.play().catch(err => console.log('Background music failed:', err));
+      } else {
+        bgMusic.pause();
+        bgMusic.currentTime = 0;
+      }
+    }
+  }, [state.gameStarted, state.gameOver]);
+
+  // Game loop
+  const gameLoop = useCallback((timestamp) => {
+    if (!state.gameStarted || state.gameOver) return;
+
+    if (timestamp - lastUpdateRef.current >= frameInterval) {
+      dispatch({ type: 'UPDATE_GAME', onScore: playScoreSound });
+      lastUpdateRef.current = timestamp;
+    }
+
+    gameLoopRef.current = requestAnimationFrame(gameLoop);
+  }, [state.gameStarted, state.gameOver, playScoreSound]);
+
+  // Start/stop game loop
+  useEffect(() => {
+    if (state.gameStarted && !state.gameOver) {
+      gameLoopRef.current = requestAnimationFrame(gameLoop);
+    }
+
+    return () => {
+      if (gameLoopRef.current) {
+        cancelAnimationFrame(gameLoopRef.current);
+      }
+    };
+  }, [state.gameStarted, state.gameOver, gameLoop]);
 
   const jump = useCallback(() => {
-    if (!gameOver) {
-      setVelocity(-8);
-      if (!gameStarted) setGameStarted(true);
-    }
-  }, [gameOver]);
+    dispatch({ type: 'JUMP' });
+  }, []);
 
   useEffect(() => {
     const handleKeyPress = (e) => {
       if (e.code === 'Space') {
-        e.preventDefault(); // Prevent page scrolling
+        e.preventDefault();
         jump();
       }
     };
@@ -53,136 +235,51 @@ export default function Game() {
     return () => document.removeEventListener('keydown', handleKeyPress);
   }, [jump]);
 
-  const GROUND_HEIGHT = 80;  // Same as ground component height
+  const resetGame = useCallback(() => {
+    dispatch({ type: 'RESET' });
+  }, []);
 
-  useEffect(() => {
-    let gameLoop;
-    if (gameStarted && !gameOver) {
-      gameLoop = setInterval(() => {
-        // Gentler gravity acceleration
-        setVelocity(v => Math.min(v + 0.4, 8));
-        
-        // Update position using velocity
-        setBirdPosition(pos => {
-          const newPos = pos + velocity;
-          // Prevent bird from going above screen
-          return Math.max(0, newPos);
-        });
-        
-        // Move clouds with parallax effect
-        setClouds(currentClouds => 
-          currentClouds.map(cloud => ({
-            ...cloud,
-            x: cloud.x - cloud.speed,
-            ...(cloud.x < -100 && { x: 500, y: Math.random() * 200 })
-          }))
-        );
-
-        setPipePairs(currentPairs => {
-          const newPairs = currentPairs
-            .map(pair => {
-              // Check if bird has passed through the scoring zone
-              const birdX = 100; // Bird's fixed X position
-              const birdWidth = 40;
-              const scoringZone = pair.x + 30; // Middle of the pipe
-
-              if (scoringZone <= birdX + birdWidth && !scoredPairs.has(pair.id)) {
-                setScoredPairs(prev => new Set([...prev, pair.id]));
-                setScore(s => s + 1);
-                playScoreSound();
-              }
-
-              return { ...pair, x: pair.x - 5 };
-            })
-            .filter(pair => pair.x > -60);
-            
-          if (currentPairs.length === 0 || currentPairs[currentPairs.length - 1].x < 0) {
-            const topHeight = Math.random() * 200 + 100;
-            newPairs.push({
-              id: Date.now(),
-              x: 400,
-              topHeight,
-              bottomHeight: 500 - topHeight - pipeGap
-            });
-          }
-          
-          return newPairs;
-        });
-
-        // Update collision detection
-        const BIRD_X = 100;
-        const BIRD_SIZE = 40;
-        const PIPE_WIDTH = 60;
-
-        // Update ground collision check
-        if (birdPosition <= 0 || birdPosition >= 500 - GROUND_HEIGHT - BIRD_SIZE) {
-          setGameOver(true);
-        }
-
-        // Check pipe collisions with pairs
-        pipePairs.forEach(pair => {
-          if (pair.x < BIRD_X + BIRD_SIZE && pair.x + PIPE_WIDTH > BIRD_X) {
-            if (birdPosition < pair.topHeight || 
-                birdPosition + BIRD_SIZE > 500 - pair.bottomHeight) {
-              setGameOver(true);
-            }
-          }
-        });
-
-      }, 20);
-    }
-    return () => clearInterval(gameLoop);
-  }, [gameStarted, gameOver, birdPosition, pipePairs, scoredPairs, velocity]);
-
-  const resetGame = () => {
-    setBirdPosition(250);
-    setPipePairs([]);
-    setScore(0);
-    setGameOver(false);
-    setGameStarted(false);
-    setScoredPairs(new Set());
-  };
-
-  const backToCharacterSelect = () => {
+  const backToCharacterSelect = useCallback(() => {
     resetGame();
     setSelectedCharacter(null);
-  };
+  }, [resetGame]);
 
   if (!selectedCharacter) {
     return <CharacterSelect onSelect={setSelectedCharacter} />;
   }
 
-  // Pass the selected character to the Bird component
   return (
     <div className="game" onClick={jump}>
-      {clouds.map((cloud, i) => (
-        <Cloud key={`cloud-${i}`} x={cloud.x} y={cloud.y} />
+      <audio id="scoreSound" src={scoreAudio} preload="auto" />
+      <audio id="bgMusic" src={backgroundAudio} loop preload="auto" />
+      {state.clouds.map((cloud) => (
+        <MemoizedCloud key={cloud.id} x={cloud.x} y={cloud.y} />
       ))}
-      <Bird 
-        position={birdPosition} 
+      <MemoizedBird 
+        position={state.birdPosition} 
         characterImage={selectedCharacter.spriteSheet}
-        velocity={velocity}
+        velocity={state.velocity}
       />
-      {pipePairs.map(pair => (
-        <Pipe 
+      {state.pipePairs.map(pair => (
+        <MemoizedPipe 
           key={pair.id}
           x={pair.x}
           topHeight={pair.topHeight}
           bottomHeight={pair.bottomHeight}
         />
       ))}
-      <Ground />
-      {!gameStarted && <div className="start">Press Space to Start</div>}
-      {gameOver && (
+      <MemoizedGround />
+      {!state.gameStarted && <div className="start">Press Space to Start</div>}
+      {state.gameOver && (
         <div className="game-over">
-          Game Over! Score: {Math.floor(score/2)}
+          Game Over! Score: {state.score}
           <div className="game-over-buttons">
             <button onClick={resetGame}>Play Again</button>
             <button onClick={backToCharacterSelect}>Select Character</button>
           </div>
         </div>
       )}
-      <div className="score">Score: {Math.floor(score/2)}</div>
+      <div className="score">Score: {state.score}</div>
     </div>
   );
 } 
