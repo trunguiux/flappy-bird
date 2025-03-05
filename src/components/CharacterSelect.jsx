@@ -1,84 +1,175 @@
-import { useState, useEffect } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import './CharacterSelect.css';
-import characters from '../utils/characterLoader';
+import { themes } from '../utils/themeLoader';
 
-export default function CharacterSelect({ onSelect }) {
-  const [selectedCharacter, setSelectedCharacter] = useState(0);
+/**
+ * Helper function to determine if a value is a color
+ */
+const isColor = (value) => {
+  return typeof value === 'string' && (value.startsWith('#') || value.startsWith('rgb'));
+};
+
+/**
+ * Theme selection component
+ */
+export default function ThemeSelect({ onSelect }) {
+  const [selectedTheme, setSelectedTheme] = useState(0);
   
-  const handleKeyPress = (e) => {
+  // Handle keyboard navigation
+  const handleKeyPress = useCallback((e) => {
     if (e.code === 'Enter') {
-      onSelect(characters[selectedCharacter]);
+      onSelect(themes[selectedTheme]);
     } else if (e.code === 'ArrowLeft') {
-      setSelectedCharacter(prev => (prev > 0 ? prev - 1 : characters.length - 1));
+      setSelectedTheme(prev => (prev > 0 ? prev - 1 : themes.length - 1));
     } else if (e.code === 'ArrowRight') {
-      setSelectedCharacter(prev => (prev < characters.length - 1 ? prev + 1 : 0));
+      setSelectedTheme(prev => (prev < themes.length - 1 ? prev + 1 : 0));
     }
+  }, [onSelect, selectedTheme]);
+
+  // Get current theme
+  const currentTheme = themes[selectedTheme];
+  
+  // Get background style based on current theme
+  const backgroundStyle = useMemo(() => {
+    const background = currentTheme.assets.background;
+    
+    if (!background || background.length === 0) {
+      return { backgroundColor: '#87CEEB' };
+    }
+    
+    const bgValue = background[0];
+    
+    return isColor(bgValue)
+      ? { backgroundColor: bgValue }
+      : { 
+          backgroundImage: `url(${bgValue})`,
+          backgroundSize: 'cover'
+        };
+  }, [currentTheme.assets.background]);
+
+  // Bird preview style
+  const birdStyle = useMemo(() => ({
+    backgroundImage: currentTheme.assets.bird && currentTheme.assets.bird.length > 0
+      ? `url(${currentTheme.assets.bird[0]})` 
+      : 'none',
+    width: '40px',
+    height: '40px',
+    backgroundRepeat: 'no-repeat',
+    position: 'absolute',
+    left: '30%',
+    top: '40%',
+    transform: 'scale(1.5)'
+  }), [currentTheme.assets.bird]);
+
+  // Pipe container style
+  const pipeContainerStyle = {
+    position: 'absolute',
+    right: '20%',
+    width: '40px',
+    height: '120px',
+    overflow: 'hidden'
   };
 
-  useEffect(() => {
-    // Test if images are loading
-    characters.forEach(char => {
-      console.log('Testing image:', char.image);
-      const img = new Image();
-      img.onload = () => console.log('Image loaded:', char.image);
-      img.onerror = () => console.error('Image failed to load:', char.image);
-      img.src = char.image;
+  // Pipe content style
+  const pipeContentStyle = useMemo(() => ({
+    width: '100%',
+    height: '100%',
+    backgroundImage: currentTheme.assets.pipes && currentTheme.assets.pipes.length > 0
+      ? `url(${currentTheme.assets.pipes[0]})` 
+      : 'none',
+    backgroundSize: 'contain',
+    backgroundRepeat: 'no-repeat',
+    backgroundPosition: 'top'
+  }), [currentTheme.assets.pipes]);
 
-      console.log('Testing sprite:', char.spriteSheet);
-      const sprite = new Image();
-      sprite.onload = () => console.log('Sprite loaded:', char.spriteSheet);
-      sprite.onerror = () => console.error('Sprite failed to load:', char.spriteSheet);
-      sprite.src = char.spriteSheet;
-    });
-  }, []);
+  // Ground style
+  const groundStyle = useMemo(() => ({
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    width: '100%',
+    height: '40px',
+    backgroundImage: currentTheme.assets.ground && currentTheme.assets.ground.length > 0
+      ? `url(${currentTheme.assets.ground[0]})` 
+      : 'none',
+    backgroundRepeat: 'repeat-x',
+    backgroundPosition: 'bottom'
+  }), [currentTheme.assets.ground]);
 
-  console.log('Characters in select:', characters);
+  // Handle theme selection
+  const selectTheme = useCallback(() => {
+    onSelect(currentTheme);
+  }, [onSelect, currentTheme]);
 
   return (
     <div 
-      className="character-select" 
+      className="theme-select" 
       tabIndex={0} 
       onKeyDown={handleKeyPress}
       autoFocus
     >
-      <div className="test-animation" />
+      <h2>Select Your Theme</h2>
       
-      <h2>Select Your Character</h2>
-      <div className="characters">
-        {characters.map((char, index) => {
-          console.log(`Character ${index} image:`, char.image);
-          return (
-            <div 
-              key={char.id} 
-              className={`character ${selectedCharacter === index ? 'selected' : ''}`}
-              onClick={() => {
-                setSelectedCharacter(index);
-                if (selectedCharacter === index) {
-                  onSelect(char);
-                }
+      <div className="theme-preview" style={backgroundStyle}>
+        <div className="theme-preview-content">
+          {/* Bird preview */}
+          <div className="bird-preview" style={birdStyle} />
+          
+          {/* Pipe preview - top */}
+          <div 
+            className="pipe-preview-container"
+            style={{
+              ...pipeContainerStyle,
+              top: 0
+            }}
+          >
+            <div
+              style={{
+                ...pipeContentStyle,
+                transform: 'rotate(180deg)',
+                transformOrigin: 'center bottom'
               }}
-            >
-              <div 
-                className="preview"
-                style={{
-                  backgroundImage: `url(${char.spriteSheet})`,
-                  backgroundSize: '120px 40px',
-                  width: '40px',
-                  height: '40px',
-                  backgroundPosition: '0 0',
-                  backgroundRepeat: 'no-repeat',
-                  animation: 'sprite-animation 0.3s steps(3) infinite',
-                  imageRendering: 'pixelated'
-                }}
-              />
-              <p>{char.name}</p>
-            </div>
-          );
-        })}
+            />
+          </div>
+          
+          {/* Pipe preview - bottom */}
+          <div 
+            className="pipe-preview-container"
+            style={{
+              ...pipeContainerStyle,
+              bottom: 0
+            }}
+          >
+            <div style={pipeContentStyle} />
+          </div>
+          
+          {/* Ground preview */}
+          <div className="ground-preview" style={groundStyle} />
+        </div>
       </div>
+      
+      <h3>{currentTheme.name}</h3>
+      <p className="theme-description">{currentTheme.description}</p>
+      
+      <div className="theme-selector">
+        {themes.map((theme, index) => (
+          <div 
+            key={theme.id} 
+            className={`theme-dot ${selectedTheme === index ? 'selected' : ''}`}
+            onClick={() => setSelectedTheme(index)}
+          />
+        ))}
+      </div>
+      
+      <button 
+        className="start-button"
+        onClick={selectTheme}
+      >
+        Start Game
+      </button>
+      
       <p className="instructions">
-        Use ← → to select and ENTER to start<br/>
-        Or double click to select
+        Use ← → to select and ENTER to start
       </p>
     </div>
   );
